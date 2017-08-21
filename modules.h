@@ -22,6 +22,8 @@ typedef struct module
 	size_t num_ph;
 	size_t size_ph;
 
+	ElfW(Dyn) *dynamic;
+
 	size_t num_rev_deps;
 	struct module **rev_deps;
 }
@@ -44,5 +46,6 @@ extern mod_ns *create_namespace(void);
 extern module *create_module(char const *);
 extern void ns_add_parent(mod_ns *, mod_ns *);
 extern void ns_add_module(mod_ns *, module *);
+extern void dump_mods(void);
 
 #endif

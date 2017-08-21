@@ -30,12 +30,14 @@ void dlng_main(void *stack)
 	dynamic_ns = create_namespace();
 
 	module *dlng = create_module(NULL);
-	dlng->base_addr = (ElfW(Addr))(void *)-1;
+	dlng->base_addr = -1;
 	dlng->program_headers = NULL;
 	
 	ns_add_module(dynamic_ns, dlng);
 
-	module *program = create_module(NULL);
+	module *program = create_module(argv[0]);
+	program->filename = argv[0];
+	program->base_addr = 0;
 	ns_add_module(dynamic_ns, program);
 	
 	ElfW(Addr) entry;
@@ -92,6 +94,31 @@ void dlng_main(void *stack)
 		panic("Cannot find program: AT_PHENT not specified\n");
 	if(!seen_phnum)
 		panic("Cannot find program: AT_PHNUM not specified\n");
+
+	ElfW(Phdr) *phdr;
+	size_t phidx;
+
+	for(phidx = 0, phdr = program->program_headers; phidx < program->num_ph; phidx++, phdr = PTR_ADVANCE_I(phdr, program->size_ph))
+		if(phdr->p_type == PT_PHDR)
+		{
+			program->base_addr = (ElfW(Addr))program->program_headers - phdr->p_vaddr;
+			break;
+		}
+
+	for(phidx = 0, phdr = program->program_headers; phidx < program->num_ph; phidx++, phdr = PTR_ADVANCE_I(phdr, program->size_ph))
+		switch(phdr->p_type)
+		{
+			case PT_DYNAMIC:
+				program->dynamic = (ElfW(Dyn) *)(phdr->p_vaddr + program->base_addr);
+				break;
+
+			case PT_INTERP:
+				dlng->filename = strdup((char const *)(phdr->p_vaddr + program->base_addr));
+				dlng->name = strdup((char const *)(phdr->p_vaddr + program->base_addr));
+
+			deafult:
+				break;
+		}
 
 	exit(0);
 }
