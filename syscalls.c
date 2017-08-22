@@ -20,6 +20,11 @@ int open(char const *file, int flags, int mode)
 	return syscall(__NR_open, file, flags, mode);
 }
 
+size_t lseek(int fd, intptr_t offset, int whence)
+{
+	return syscall(__NR_lseek, fd, offset, whence);
+}
+
 void *mmap(void *addr, size_t size, int prot, int flags, int fd, size_t offset)
 {
 	return (void *)syscall(__NR_mmap, addr, size, prot, flags, fd, offset);

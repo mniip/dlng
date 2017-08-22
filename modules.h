@@ -22,8 +22,16 @@ typedef struct module
 	ElfW(Phdr) *program_headers;
 	size_t num_ph;
 	size_t size_ph;
+	int ph_mapped;
 
 	ElfW(Dyn) *dynamic;
+	ElfW(Sym) *symtab;
+	size_t num_st;
+	size_t size_st;
+	char *strtab;
+
+	void (*init)();
+	void (*fini)();
 
 	size_t num_rev_deps;
 	struct module **rev_deps;

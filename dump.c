@@ -22,6 +22,27 @@ void *memcpy(void *dest, void const *src, size_t len)
 	return dest;
 }
 
+char *strchr(char const *str, int c)
+{
+	while(*str)
+		if(*str == c)
+			return (char *)str;
+		else
+			str++;
+	return NULL;
+}
+
+int strcmp(char const *a, char const *b)
+{
+	while(*a && *b && *a == *b)
+		a++, b++;
+	if(*a < *b)
+		return -1;
+	if(*a > *b)
+		return 1;
+	return 0;
+}
+
 char *strdup(char const *str)
 {
 	size_t size = strlen(str) + 1;

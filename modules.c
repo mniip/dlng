@@ -38,6 +38,7 @@ void ns_add_parent(mod_ns *ns, mod_ns *parent)
 
 void ns_add_module(mod_ns *ns, module *mod)
 {
+	mod->parent_ns = ns;
 	mod->next = ns->first_mod;
 	ns->first_mod = mod;
 }

@@ -1,9 +1,11 @@
 #include <stdint.h>
-#include <asm-generic/fcntl.h>
+#include <asm/prctl.h>
+#include <linux/fcntl.h>
 #include <linux/auxvec.h>
 
 #include "modules.h"
 #include "elf.h"
+#include "alloc.h"
 #include "syscalls.h"
 #include "util.h"
 #include "dump.h"
@@ -32,11 +34,12 @@ void dlng_main(void *stack)
 	module *dlng = create_module(NULL);
 	dlng->base_addr = -1;
 	dlng->program_headers = NULL;
+	dlng->ph_mapped = 0;
 	
 	ns_add_module(dynamic_ns, dlng);
 
 	module *program = create_module(argv[0]);
-	program->filename = argv[0];
+	program->filename = strdup(argv[0]);
 	program->base_addr = 0;
 	ns_add_module(dynamic_ns, program);
 	
@@ -57,6 +60,7 @@ void dlng_main(void *stack)
 			
 			case AT_PHDR:
 				program->program_headers = (void *)auxvec->a_un.a_val;
+				program->ph_mapped = 1;
 				seen_phdr = 1;
 				break;
 
@@ -116,9 +120,23 @@ void dlng_main(void *stack)
 				dlng->filename = strdup((char const *)(phdr->p_vaddr + program->base_addr));
 				dlng->name = strdup((char const *)(phdr->p_vaddr + program->base_addr));
 
-			deafult:
+			default:
 				break;
 		}
 
+	arch_prctl(ARCH_SET_FS, mmap_malloc(0)); // TODO
+
+	process_dynamic(program);
+
+	module *mod;
+	for(mod = dynamic_ns->first_mod; mod; mod = mod->next)
+		if(mod->init)
+		{
+			dumpf("Calling init for %s\n", mod->name);
+			mod->init();
+		}
+
+	dump_mods();
+	
 	exit(0);
 }
