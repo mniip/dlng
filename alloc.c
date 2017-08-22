@@ -1,10 +1,8 @@
 #include <linux/mman.h>
-#include <sys/user.h>
 
 #include "dump.h"
 #include "syscalls.h"
-
-#define PAGE_PAD(x) (((x)|~PAGE_MASK)+1)
+#include "util.h"
 
 typedef struct alloc_header
 {
@@ -20,7 +18,7 @@ void *mmap_malloc(size_t size)
 	size_t mapping_size = PAGE_PAD(size + sizeof(alloc_header));
 	void *mapping = mmap(NULL, mapping_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	
-	if(mapping > (void*)-4096)
+	if(MAP_BAD(mapping))
 		return NULL;
 
 	alloc_header *header = mapping;
@@ -55,7 +53,7 @@ void *mmap_realloc(void *data, size_t size)
 		return data;
 
 	void *new = mremap(header, header->size + sizeof(alloc_header), size + sizeof(alloc_header), MREMAP_MAYMOVE, NULL);
-	if(new < (void *)0 && new > (void*)-4096)
+	if(MAP_BAD(new))
 	{
 		new = mmap_malloc(size);
 		if(!new)

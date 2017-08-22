@@ -4,9 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "elf.h"
-
 struct mod_ns;
+struct module;
+
+#include "elf.h"
 
 typedef struct module
 {

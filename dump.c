@@ -32,15 +32,7 @@ char *strdup(char const *str)
 
 static void dump_s(char const *str, size_t len)
 {
-	size_t wrote = 0;
-	while(wrote < len)
-	{
-		intptr_t w = write(1, str + wrote, len - wrote);
-		if(w > 0)
-			wrote += w;
-		else
-			break;
-	}
+	write_all(1, str, len);
 }
 
 static void dump_sz(char const *str)

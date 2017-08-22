@@ -46,7 +46,42 @@ void exit(int code)
 	__builtin_unreachable();
 }
 
-extern int kill(intptr_t pid, int signal)
+int kill(intptr_t pid, int signal)
 {
 	return syscall(__NR_kill, pid, signal); 
+}
+
+int arch_prctl(int code, void *addr)
+{
+	return syscall(__NR_arch_prctl, code, addr);
+}
+
+int read_all(int fd, void *buf, size_t size)
+{
+	size_t done = 0;
+	while(done < size)
+	{
+		size_t ret = read(fd, buf + done, size);
+		if(ret < 0)
+			return ret;
+		if(ret == 0)
+			break;
+		done += ret;
+	}
+	return done;
+}
+
+int write_all(int fd, void const *buf, size_t size)
+{
+	size_t done = 0;
+	while(done < size)
+	{
+		size_t ret = write(fd, buf + done, size);
+		if(ret < 0)
+			return ret;
+		if(ret == 0)
+			break;
+		done += ret;
+	}
+	return done;
 }

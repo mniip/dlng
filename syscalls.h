@@ -13,5 +13,9 @@ extern void *mremap(void *, size_t, size_t, int, void *);
 extern intptr_t getpid(void);
 extern void exit(int) __attribute__((noreturn));
 extern int kill(intptr_t, int);
+extern int arch_prctl(int, void *);
+
+extern int read_all(int, void *, size_t);
+extern int write_all(int, void const *, size_t);
 
 #endif
