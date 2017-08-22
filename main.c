@@ -124,7 +124,9 @@ void dlng_main(void *stack)
 				break;
 		}
 
-	arch_prctl(ARCH_SET_FS, mmap_malloc(0)); // TODO
+	void **tls = mmap_malloc(sizeof(void *));
+	tls[0] = tls;
+	arch_prctl(ARCH_SET_FS, tls);
 
 	process_dynamic(program);
 
