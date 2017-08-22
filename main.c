@@ -11,6 +11,7 @@
 #include "dump.h"
 
 extern char _start[];
+extern void start_program(void *, void (*)());
 
 void dlng_main(void *stack)
 {
@@ -139,6 +140,9 @@ void dlng_main(void *stack)
 		}
 
 	dump_mods();
+
+	dumpf("Transferring control to the program\n");
+	start_program(stack, (void(*)())entry);
 	
 	exit(0);
 }
