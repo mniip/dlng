@@ -30,8 +30,8 @@ typedef struct module
 	size_t size_st;
 	char *strtab;
 
-	void (*init)();
-	void (*fini)();
+	void (*init)(int, char **, char **);
+	void (*fini)(void);
 
 	size_t num_rev_deps;
 	struct module **rev_deps;

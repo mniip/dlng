@@ -144,7 +144,7 @@ void dlng_main(void *stack)
 		if(mod->init)
 		{
 			dumpf("Calling init for %s\n", mod->name);
-			mod->init();
+			mod->init(argc, argv, envp);
 		}
 
 	dump_mods();
