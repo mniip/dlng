@@ -276,17 +276,17 @@ void process_dynamic(module *mod)
 	if(!mod->dynamic)
 		return;
 
-	ElfW(Rela) *rela;
+	ElfW(Rela) *rela = NULL;
 	size_t rela_size = sizeof(ElfW(Rela));
 	size_t rela_length = 0;
 	int seen_rela = 0;
 	
-	ElfW(Rel) *rel;
+	ElfW(Rel) *rel = NULL;
 	size_t rel_size = sizeof(ElfW(Rel));
 	size_t rel_length = 0;
 	int seen_rel = 0;
 	
-	void *pltrel;
+	void *pltrel = NULL;
 	ElfW(Sword) pltrel_type = DT_NULL;
 	size_t pltrel_length = 0;
 	int seen_pltrel = 0;
