@@ -20,6 +20,7 @@
 
 #include "modules.h"
 
-extern void process_dynamic(struct module *mod);
+extern struct module *load_soname(char const *);
+extern void process_dynamic(struct module *);
 
 #endif

@@ -12,6 +12,7 @@
 #include "debug.h"
 
 extern char _start[];
+extern char _DYNAMIC[];
 extern void start_program(void *, void (*)());
 
 void dlng_main(void *stack)
@@ -30,6 +31,7 @@ void dlng_main(void *stack)
 	stk = PTR_ADVANCE(stk, char const *);
 
 	ElfW(auxv_t) *auxvec = stk;
+	ElfW(auxv_t) *av;
 	
 	dynamic_ns = create_namespace();
 
@@ -39,105 +41,143 @@ void dlng_main(void *stack)
 	dlng->ph_mapped = 0;
 	
 	ns_add_module(dynamic_ns, dlng);
-
-	module *program = create_module(argv[0]);
-	program->filename = strdup(argv[0]);
-	program->base_addr = 0;
-	ns_add_module(dynamic_ns, program);
 	
 	ElfW(Addr) entry;
-	int seen_entry = 0, seen_phdr = 0, seen_phnum = 0, seen_phent = 0;
+	int seen_entry;
 
-	while(auxvec->a_type != AT_NULL)
+	av = auxvec;
+	while(av->a_type != AT_NULL)
 	{
-		switch(auxvec->a_type)
+		switch(av->a_type)
 		{
 			case AT_EXECFD:
 				panic("AT_EXECFD not supported\n");
 
 			case AT_NOTELF:
-				if(auxvec->a_un.a_val)
+				if(av->a_un.a_val)
 					panic("AT_NOTELF not supported\n");
 				break;
 			
-			case AT_PHDR:
-				program->program_headers = (void *)auxvec->a_un.a_val;
-				program->ph_mapped = 1;
-				seen_phdr = 1;
-				break;
-
 			case AT_ENTRY:
-				entry = auxvec->a_un.a_val;
+				entry = av->a_un.a_val;
 				seen_entry = 1;
 				break;
 
-			case AT_PHENT:
-				program->size_ph = auxvec->a_un.a_val;
-				seen_phent = 1;
-
-			case AT_PHNUM:
-				program->num_ph = auxvec->a_un.a_val;
-				seen_phnum = 1;
-
 			case AT_BASE:
-				dlng->base_addr = auxvec->a_un.a_val;
+				dlng->base_addr = av->a_un.a_val;
 
 			default:
 				break;
 		}
-		auxvec++;
+		av++;
 	}
 
 	if(!seen_entry)
 		panic("Cannot find program: AT_ENTRY not specified\n");
-	
-	if((void *)entry == (void *)&_start)
-		panic("Direct invocation not supported\n");
-	
-	if(!seen_phdr)
-		panic("Cannot find program: AT_PHDR not specified\n");
-	if(!seen_phent)
-		panic("Cannot find program: AT_PHENT not specified\n");
-	if(!seen_phnum)
-		panic("Cannot find program: AT_PHNUM not specified\n");
-
-	ElfW(Phdr) *phdr;
-	size_t phidx;
-
-	for(phidx = 0, phdr = program->program_headers; phidx < program->num_ph; phidx++, phdr = PTR_ADVANCE_I(phdr, program->size_ph))
-		if(phdr->p_type == PT_PHDR)
-		{
-			program->base_addr = (ElfW(Addr))program->program_headers - phdr->p_vaddr;
-			break;
-		}
-
-	for(phidx = 0, phdr = program->program_headers; phidx < program->num_ph; phidx++, phdr = PTR_ADVANCE_I(phdr, program->size_ph))
-		switch(phdr->p_type)
-		{
-			case PT_DYNAMIC:
-				program->dynamic = (ElfW(Dyn) *)(phdr->p_vaddr + program->base_addr);
-				break;
-
-			case PT_INTERP:
-				dlng->filename = strdup((char const *)(phdr->p_vaddr + program->base_addr));
-				dlng->name = strdup((char const *)(phdr->p_vaddr + program->base_addr));
-
-			default:
-				break;
-		}
-
-	debug_init(dlng);
-	ElfW(Dyn) *de;
-	for(de = program->dynamic; de->d_tag != DT_NULL; de++)
-		if(de->d_tag == DT_DEBUG)
-			de->d_un.d_ptr = (intptr_t)&r_debug;
-	debug_add(dlng);
 
 	void **tls = mmap_malloc(sizeof(void *));
 	tls[0] = tls;
 	arch_prctl(ARCH_SET_FS, tls);
+	
+	debug_init(dlng);
+	debug_add(dlng);
+	
+	module *program;
 
-	process_dynamic(program);
+	if((void *)entry == (void *)&_start)
+	{
+		dlng->filename = strdup(argv[0]);
+		dlng->name = strdup(argv[0]);
+
+		program = load_soname(argv[1]);
+
+		intptr_t *istk = (intptr_t *)stack;
+		istk[1] = istk[0] - 1;
+		stack = &istk[1];
+		argc--;
+		argv++;
+
+		entry = program->entry;
+
+		ElfW(Dyn) *de;
+		for(de = (void *)&_DYNAMIC; de->d_tag != DT_NULL; de++)
+			if(de->d_tag == DT_DEBUG)
+				de->d_un.d_ptr = (intptr_t)&r_debug;
+	}
+	else
+	{
+		program = create_module(argv[0]);
+		program->filename = strdup(argv[0]);
+		program->base_addr = 0;
+		ns_add_module(dynamic_ns, program);
+		
+		int seen_phdr = 0, seen_phnum = 0, seen_phent = 0;
+
+		av = auxvec;
+		while(av->a_type != AT_NULL)
+		{
+			switch(av->a_type)
+			{
+				case AT_PHDR:
+					program->program_headers = (void *)av->a_un.a_val;
+					program->ph_mapped = 1;
+					seen_phdr = 1;
+					break;
+
+				case AT_PHENT:
+					program->size_ph = av->a_un.a_val;
+					seen_phent = 1;
+
+				case AT_PHNUM:
+					program->num_ph = av->a_un.a_val;
+					seen_phnum = 1;
+
+				default:
+					break;
+			}
+			av++;
+		}
+		
+		if(!seen_phdr)
+			panic("Cannot find program: AT_PHDR not specified\n");
+		if(!seen_phent)
+			panic("Cannot find program: AT_PHENT not specified\n");
+		if(!seen_phnum)
+			panic("Cannot find program: AT_PHNUM not specified\n");
+
+		ElfW(Phdr) *phdr;
+		size_t phidx;
+
+		for(phidx = 0, phdr = program->program_headers; phidx < program->num_ph; phidx++, phdr = PTR_ADVANCE_I(phdr, program->size_ph))
+			if(phdr->p_type == PT_PHDR)
+			{
+				program->base_addr = (ElfW(Addr))program->program_headers - phdr->p_vaddr;
+				break;
+			}
+
+		for(phidx = 0, phdr = program->program_headers; phidx < program->num_ph; phidx++, phdr = PTR_ADVANCE_I(phdr, program->size_ph))
+			switch(phdr->p_type)
+			{
+				case PT_DYNAMIC:
+					program->dynamic = (ElfW(Dyn) *)(phdr->p_vaddr + program->base_addr);
+					break;
+
+				case PT_INTERP:
+					dlng->filename = strdup((char const *)(phdr->p_vaddr + program->base_addr));
+					dlng->name = strdup((char const *)(phdr->p_vaddr + program->base_addr));
+
+				default:
+					break;
+			}
+
+		ElfW(Dyn) *de;
+		for(de = program->dynamic; de->d_tag != DT_NULL; de++)
+			if(de->d_tag == DT_DEBUG)
+				de->d_un.d_ptr = (intptr_t)&r_debug;
+
+		process_dynamic(program);
+	}
+
 
 	module *mod;
 	for(mod = dynamic_ns->first_mod; mod; mod = mod->next)

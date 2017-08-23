@@ -36,7 +36,7 @@ void *base_addr_random(ElfW(Phdr) *phdrs, size_t num_ph, size_t size_ph)
 		panic("Could not find region\n");
 	munmap(base, max - min);
 
-	return base;
+	return base - min;
 }
 
 void load_segments(int fd, module *mod)
@@ -103,10 +103,12 @@ module *load_fd(int fd, char const *name)
 	ElfW(Phdr) *phdrs = mmap_malloc(header.e_phnum * header.e_phentsize);
 	read_all(fd, phdrs, header.e_phnum * header.e_phentsize);
 
-	void *base_addr = base_addr_random(phdrs, header.e_phnum, header.e_phentsize);
-
 	module *mod = create_module(name);
 	mod->filename = strdup(name);
+
+	void *base_addr = header.e_type == ET_EXEC ? 0 : base_addr_random(phdrs, header.e_phnum, header.e_phentsize);
+
+	mod->entry = (ElfW(Addr))base_addr + header.e_entry;
 	mod->base_addr = (ElfW(Addr))base_addr;
 	mod->program_headers = phdrs;
 	mod->ph_mapped = 0;
@@ -128,16 +130,13 @@ module *load_fd(int fd, char const *name)
 	return mod;
 }
 
-void load_soname(char const *name)
+module *load_soname(char const *name)
 {
 	if(strchr(name, '/'))
 	{
 		int fd = open(name, O_RDONLY, 0);
 		if(fd >= 0)
-		{
-			load_fd(fd, name);
-			return;
-		}
+			return load_fd(fd, name);
 	}
 
 	char const *usrlib = "/usr/lib/";
@@ -146,9 +145,11 @@ void load_soname(char const *name)
 	memcpy(newname + strlen(usrlib), name, strlen(name) + 1);
 
 	int fd = open(newname, O_RDONLY, 0);
+	module *mod = NULL;
 	if(fd >= 0)
-		load_fd(fd, newname);
+		mod = load_fd(fd, newname);
 	mmap_free(newname);
+	return mod;
 }
 
 intptr_t symbol_value(module *mod, size_t symbol)

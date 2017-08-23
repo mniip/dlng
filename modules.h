@@ -18,6 +18,8 @@ typedef struct module
 	char *name;
 	char *filename;
 
+	ElfW(Addr) entry;
+
 	ElfW(Addr) base_addr;
 	ElfW(Phdr) *program_headers;
 	size_t num_ph;
