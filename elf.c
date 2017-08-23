@@ -3,6 +3,7 @@
 #include <linux/fs.h>
 
 #include "syscalls.h"
+#include "debug.h"
 #include "elf.h"
 #include "alloc.h"
 #include "util.h"
@@ -341,4 +342,6 @@ void process_dynamic(module *mod)
 		else if(pltrel_type == DT_REL)
 			process_rel(mod, (ElfW(Rel) *)pltrel, rel_size, pltrel_length);
 	}
+
+	debug_add(mod);
 }

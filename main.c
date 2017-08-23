@@ -9,6 +9,7 @@
 #include "syscalls.h"
 #include "util.h"
 #include "dump.h"
+#include "debug.h"
 
 extern char _start[];
 extern void start_program(void *, void (*)());
@@ -124,6 +125,13 @@ void dlng_main(void *stack)
 			default:
 				break;
 		}
+
+	debug_init(dlng);
+	ElfW(Dyn) *de;
+	for(de = program->dynamic; de->d_tag != DT_NULL; de++)
+		if(de->d_tag == DT_DEBUG)
+			de->d_un.d_ptr = (intptr_t)&r_debug;
+	debug_add(dlng);
 
 	void **tls = mmap_malloc(sizeof(void *));
 	tls[0] = tls;
