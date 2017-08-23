@@ -4,7 +4,7 @@
 
 volatile struct r_debug r_debug;
 
-void debug_notify()
+void debug_notify(void)
 {
 }
 
