@@ -186,13 +186,6 @@ intptr_t symbol_value(module *mod, size_t symbol)
 	panic("Could not find %s (%s)\n", name, mod->name);
 }
 
-void *get_tls()
-{
-	void *val;
-	asm ("movq %%fs:0, %0" : "=r"(val));
-	return val;
-}
-
 void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t addend)
 {
 	void *loc = mod->base_addr + offset;
@@ -212,7 +205,7 @@ void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t adden
 			break;
 
 		case R_X86_64_TPOFF64:
-			*(intptr_t *)loc = (symbol ? symbol_value(mod, symbol) : 0) + addend - (intptr_t)get_tls();
+			*(intptr_t *)loc = (symbol ? symbol_value(mod, symbol) : 0) + addend;
 			break;
 
 		case R_X86_64_IRELATIVE:
