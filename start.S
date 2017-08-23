@@ -8,4 +8,5 @@ _start:
 .global start_program
 start_program:
 	mov %rdi, %rsp
+	mov $0, %rdx
 	jmp *%rsi

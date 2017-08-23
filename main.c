@@ -21,10 +21,10 @@ void dlng_main(void *stack)
 	intptr_t argc = *(intptr_t *)stk;
 	stk = PTR_ADVANCE(stk, intptr_t);
 
-	char const **argv = stk;
+	char **argv = stk;
 	stk = PTR_ADVANCE_N(stk, char const *, argc + 1);
 	
-	char const **envp = stk;
+	char **envp = stk;
 	while(*(char const **)stk)
 		stk = PTR_ADVANCE(stk, char const *);
 	stk = PTR_ADVANCE(stk, char const *);
