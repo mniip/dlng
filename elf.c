@@ -47,7 +47,8 @@ void load_segments(int fd, module *mod)
 		if(phdr->p_type == PT_LOAD && phdr->p_memsz)
 		{
 			void *start = (void *)PAGE_START(mod->base_addr + phdr->p_vaddr);
-			void *fend = (void *)PAGE_PAD(mod->base_addr + phdr->p_vaddr + phdr->p_filesz);
+			void *bss = (void *)(mod->base_addr + phdr->p_vaddr + phdr->p_filesz);
+			void *fend = (void *)PAGE_PAD(bss);
 			void *mend = (void *)PAGE_PAD(mod->base_addr + phdr->p_vaddr + phdr->p_memsz);
 			size_t offt = PAGE_START(phdr->p_offset);
 
@@ -59,13 +60,21 @@ void load_segments(int fd, module *mod)
 			if(phdr->p_flags & PF_X)
 				prot |= PROT_EXEC;
 
-			void *mapping = mmap(start, fend - start, prot, MAP_PRIVATE, fd, offt);
+			void *mapping = mmap(start, fend - start, prot, MAP_FIXED | MAP_PRIVATE, fd, offt);
 			if(MAP_BAD(mapping))
 				panic("Could not map header\n");
+			if(fend != bss)
+			{
+				if(!(prot & PROT_WRITE))
+					mprotect((void *)PAGE_START(bss), PAGE_SIZE, prot | PROT_WRITE);
+				memset(bss, 0, fend - bss);
+				if(!(prot & PROT_WRITE))
+					mprotect((void *)PAGE_START(bss), PAGE_SIZE, prot);
+			}
 			if(fend != mend)
 			{
-				void *bss = mmap(fend, mend - fend, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-				if(MAP_BAD(bss))
+				void *bss_rest = mmap(fend, mend - fend, prot, MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+				if(MAP_BAD(bss_rest))
 					panic("Could not map header's bss\n");
 			}
 		}

@@ -1,4 +1,4 @@
-CFLAGS= -O3 -ggdb -fno-stack-protector -fPIE -pie -Wall
+CFLAGS= -O3 -ggdb -fno-stack-protector -fPIE -pie -Wall -fno-builtin
 ASFLAGS= --64 -ggdb
 LDFLAGS= -nostdlib -shared
 

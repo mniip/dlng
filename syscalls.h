@@ -9,6 +9,7 @@ extern intptr_t write(int, void const *, size_t);
 extern int open(char const *, int, int);
 extern size_t lseek(int, intptr_t, int);
 extern void *mmap(void *, size_t, int, int, int, size_t);
+extern int mprotect(void *, size_t, int);
 extern int munmap(void *, size_t);
 extern void *mremap(void *, size_t, size_t, int, void *);
 extern intptr_t getpid(void);

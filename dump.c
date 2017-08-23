@@ -22,6 +22,14 @@ void *memcpy(void *dest, void const *src, size_t len)
 	return dest;
 }
 
+void *memset(void *dest, int val, size_t len)
+{
+	size_t i;
+	for(i = 0; i < len; i++)
+		((char *)dest)[i] = val;
+	return dest;
+}
+
 char *strchr(char const *str, int c)
 {
 	while(*str)

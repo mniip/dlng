@@ -3,8 +3,8 @@
 
 #include <sys/user.h>
 
-#define PAGE_START(x) ((x)&PAGE_MASK)
-#define PAGE_PAD(x) (((x)|~PAGE_MASK)+1)
+#define PAGE_START(x) (((intptr_t)x)&PAGE_MASK)
+#define PAGE_PAD(x) ((((intptr_t)x)|~PAGE_MASK)+1)
 
 #define MAP_BAD(x) (((void *)x) > (void *)-4096)
 

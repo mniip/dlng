@@ -5,6 +5,7 @@
 #include <stdarg.h>
 
 extern void *memcpy(void *, void const *, size_t);
+extern void *memset(void *, int, size_t);
 extern size_t strlen(char const *);
 extern char *strdup(char const *);
 extern char *strchr(char const *, int);

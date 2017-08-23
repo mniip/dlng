@@ -30,6 +30,11 @@ void *mmap(void *addr, size_t size, int prot, int flags, int fd, size_t offset)
 	return (void *)syscall(__NR_mmap, addr, size, prot, flags, fd, offset);
 }
 
+int mprotect(void *addr, size_t size, int prot)
+{
+	return syscall(__NR_mprotect, addr, size, prot);
+}
+
 int munmap(void *addr, size_t size)
 {
 	return syscall(__NR_munmap, addr, size);
