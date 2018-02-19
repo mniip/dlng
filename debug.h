@@ -12,6 +12,7 @@ struct r_debug
 	ElfW(Addr) r_ldbase;
 };
 
+extern volatile struct r_debug local_debug;
 extern volatile struct r_debug r_debug;
 
 struct link_map

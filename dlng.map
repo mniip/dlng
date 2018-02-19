@@ -1,3 +1,4 @@
 {
+	global: _r_debug;
 	local: *;
 };

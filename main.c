@@ -102,7 +102,7 @@ void dlng_main(void *stack)
 		ElfW(Dyn) *de;
 		for(de = (void *)&_DYNAMIC; de->d_tag != DT_NULL; de++)
 			if(de->d_tag == DT_DEBUG)
-				de->d_un.d_ptr = (intptr_t)&r_debug;
+				de->d_un.d_ptr = (intptr_t)&local_debug;
 	}
 	else
 	{
@@ -173,7 +173,7 @@ void dlng_main(void *stack)
 		ElfW(Dyn) *de;
 		for(de = program->dynamic; de->d_tag != DT_NULL; de++)
 			if(de->d_tag == DT_DEBUG)
-				de->d_un.d_ptr = (intptr_t)&r_debug;
+				de->d_un.d_ptr = (intptr_t)&local_debug;
 
 		process_dynamic(program);
 	}
