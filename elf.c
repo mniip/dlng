@@ -152,12 +152,13 @@ module *load_soname(char const *name)
 	return mod;
 }
 
-intptr_t symbol_value(module *mod, size_t symbol)
+intptr_t symbol_value_sized(module *mod, size_t symbol, size_t *size)
 {
 	char const *name = &mod->strtab[mod->symtab[symbol].st_name];
 	dumpf("Resolving %s\n", name);
 
 	int found_weak = 0;
+	size_t size_weak;
 	intptr_t weak;
 
 	mod_ns *ns;
@@ -175,6 +176,8 @@ intptr_t symbol_value(module *mod, size_t symbol)
 						if(!strcmp(name, &other->strtab[sym->st_name]))
 						{
 							dumpf("Found in %s\n", other->name);
+							if(size)
+								*size = sym->st_size;
 							return sym->st_value + other->base_addr;
 						}
 					}
@@ -183,6 +186,7 @@ intptr_t symbol_value(module *mod, size_t symbol)
 						if(!strcmp(name, &other->strtab[sym->st_name]))
 						{
 							dumpf("Found (weak) in %s\n", other->name);
+							size_weak = sym->st_size;
 							weak = sym->st_value + other->base_addr;
 							found_weak = 1;
 						}
@@ -190,10 +194,19 @@ intptr_t symbol_value(module *mod, size_t symbol)
 				}
 
 	if(found_weak)
+	{
+		if(size)
+			*size = size_weak;
 		return weak;
+	}
 	if(ELFW(ST_BIND(mod->symtab[symbol].st_info)) == STB_WEAK)
 		return 0;
 	panic("Could not find %s (%s)\n", name, mod->name);
+}
+
+intptr_t symbol_value(module *mod, size_t symbol)
+{
+	return symbol_value_sized(mod, symbol, NULL);
 }
 
 void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t addend)
@@ -221,6 +234,15 @@ void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t adden
 		case R_X86_64_IRELATIVE:
 			*(intptr_t *)loc = ((intptr_t(*)())(mod->base_addr + addend))();
 			break;
+
+		case R_X86_64_COPY:
+			{
+				size_t size;
+				intptr_t value = symbol_value_sized(mod, symbol, &size);
+				memcpy(loc, (void *)value, size);
+				dumpf("COPY %s %p <- %p + %x\n", &mod->strtab[mod->symtab[symbol].st_name], offset, value, size);
+				break;
+			}
 
 		default:
 			panic("Unknown reloc 0x%x\n", type);
