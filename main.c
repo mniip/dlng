@@ -15,6 +15,12 @@ extern char _start[];
 extern char _DYNAMIC[];
 extern void start_program(void *, void (*)());
 
+void dlng_main_finish(void);
+
+void *dlng_stack;
+ElfW(Addr) entry;
+ElfW(Addr) *entry_ptr;
+
 void dlng_main(void *stack)
 {
 	void *stk = stack;
@@ -42,7 +48,6 @@ void dlng_main(void *stack)
 	
 	ns_add_module(dynamic_ns, dlng);
 	
-	ElfW(Addr) entry;
 	int seen_entry;
 
 	av = auxvec;
@@ -59,6 +64,7 @@ void dlng_main(void *stack)
 				break;
 			
 			case AT_ENTRY:
+				entry_ptr = &av->a_un.a_val;
 				entry = av->a_un.a_val;
 				seen_entry = 1;
 				break;
@@ -189,8 +195,27 @@ void dlng_main(void *stack)
 
 	dump_mods();
 
+	size_t symidx;
+	ElfW(Sym) *sym;
+	for(mod = dynamic_ns->first_mod; mod; mod = mod->next)
+		for(symidx = 0, sym = mod->symtab; symidx < mod->num_st; symidx++, sym = PTR_ADVANCE_I(sym, mod->size_st))
+			if(!strcmp("_r_debug", &mod->strtab[sym->st_name]))
+			{
+				dumpf("%s is an RTLD\n", mod->name);
+				*entry_ptr = (ElfW(Addr))&dlng_main_finish;
+				dlng_stack = stack;
+				start_program(stack, (void(*)())mod->entry);
+				break;
+			}
+
+	dlng_main_finish();
+}
+
+void dlng_main_finish(void)
+{
+	*entry_ptr = entry;
 	dumpf("Transferring control to the program\n");
-	start_program(stack, (void(*)())entry);
+	start_program(dlng_stack, (void(*)())entry);
 	
 	exit(0);
 }
