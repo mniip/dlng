@@ -349,8 +349,26 @@ void process_dynamic(module *mod)
 		switch(de->d_tag)
 		{
 			case DT_NEEDED:
-				load_soname(&mod->strtab[de->d_un.d_val]);
+			{
+				char const *needed = &mod->strtab[de->d_un.d_val];
+				int found = 0;
+				mod_ns *ns;
+				module *other;
+				for(ns = mod->parent_ns; ns; ns = ns->parent)
+				{
+					for(other = ns->first_mod; other; other = other->next)
+						if(!strcmp(needed, other->name))
+						{
+							found = 1;
+							break;
+						}
+					if(found)
+						break;
+				}
+				if(!found)
+					load_soname(needed);
 				break;
+			}
 
 			default:
 				break;
