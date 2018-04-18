@@ -24,9 +24,10 @@ struct link_map
 	module *mod;
 };
 
+extern void debug_notify(void) __attribute__((noinline));
 extern void debug_init(module *);
 extern void debug_add(module *);
 extern void debug_remove(module *);
-extern void debug_notify(void) __attribute__((noinline));
+extern void debug_update(module *);
 
 #endif

@@ -201,6 +201,7 @@ void dlng_main(void *stack)
 				case PT_INTERP:
 					dlng->filename = strdup((char const *)(phdr->p_vaddr + program->base_addr));
 					dlng->name = strdup((char const *)(phdr->p_vaddr + program->base_addr));
+					debug_update(dlng);
 
 				default:
 					break;

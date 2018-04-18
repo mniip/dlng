@@ -69,3 +69,17 @@ void debug_remove(module *mod)
 	local_debug.r_state = RT_CONSISTENT;
 	debug_notify();
 }
+
+void debug_update(module *mod)
+{
+	struct link_map *link;
+	for(link = local_debug.r_map; link; link = link->l_next)
+		if(link->mod == mod)
+		{
+			link->l_name = mod->filename;
+			link->l_addr = mod->base_addr;
+			link->l_ld = mod->dynamic;
+			break;
+		}
+	debug_notify();
+}
