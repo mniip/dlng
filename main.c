@@ -17,9 +17,35 @@ extern void start_program(void *, void (*)());
 
 void dlng_main_finish(void);
 
-void *dlng_stack;
-ElfW(Addr) entry;
-ElfW(Addr) *entry_ptr;
+struct rtld_hook
+{
+	void *(*dlopen_mode)(char const *, int);
+	void *(*dlsym)(void *, char const *);
+	int (*dlclose)(void *);
+};
+
+void *dlopen_mode(char const *mod, int f)
+{
+	if(mod)
+		panic("dlmopen(\"%s\", %x)\n", mod, f);
+	else
+		panic("dlmopen(NULL, %x)\n", f);
+}
+
+void *dlsym(void *l, char const *s)
+{
+	if(s)
+		panic("dlsym(%p, \"%s\")\n", l, s);
+	else
+		panic("dlsym(%p, NULL)\n", l);
+}
+
+int dlclose(void *l)
+{
+	panic("dlclose(%p)\n", l);
+}
+
+struct rtld_hook dlng_rtld = {};
 
 void dlng_main(void *stack)
 {
@@ -36,6 +62,7 @@ void dlng_main(void *stack)
 		stk = PTR_ADVANCE(stk, char const *);
 	stk = PTR_ADVANCE(stk, char const *);
 
+	ElfW(Addr) entry = 0;
 	ElfW(auxv_t) *auxvec = stk;
 	ElfW(auxv_t) *av;
 	
@@ -64,7 +91,6 @@ void dlng_main(void *stack)
 				break;
 			
 			case AT_ENTRY:
-				entry_ptr = &av->a_un.a_val;
 				entry = av->a_un.a_val;
 				seen_entry = 1;
 				break;
@@ -87,6 +113,10 @@ void dlng_main(void *stack)
 	
 	debug_init(dlng);
 	debug_add(dlng);
+
+	dlng_rtld.dlopen_mode = dlopen_mode;
+	dlng_rtld.dlsym = dlsym;
+	dlng_rtld.dlclose = dlclose;
 	
 	module *program;
 
@@ -199,23 +229,14 @@ void dlng_main(void *stack)
 	ElfW(Sym) *sym;
 	for(mod = dynamic_ns->first_mod; mod; mod = mod->next)
 		for(symidx = 0, sym = mod->symtab; symidx < mod->num_st; symidx++, sym = PTR_ADVANCE_I(sym, mod->size_st))
-			if(!strcmp("_r_debug", &mod->strtab[sym->st_name]))
+			if(!strcmp("_dl_open_hook", &mod->strtab[sym->st_name]))
 			{
-				dumpf("%s is an RTLD\n", mod->name);
-				*entry_ptr = (ElfW(Addr))&dlng_main_finish;
-				dlng_stack = stack;
-				start_program(stack, (void(*)())mod->entry);
+				struct rtld_hook **hook_ptr = (struct rtld_hook **)(sym->st_value + mod->base_addr);
+				*hook_ptr = &dlng_rtld;
 				break;
 			}
 
-	dlng_main_finish();
-}
-
-void dlng_main_finish(void)
-{
-	*entry_ptr = entry;
 	dumpf("Transferring control to the program\n");
-	start_program(dlng_stack, (void(*)())entry);
-	
+	start_program(stack, (void(*)())entry);
 	exit(0);
 }
