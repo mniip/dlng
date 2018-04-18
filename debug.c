@@ -2,20 +2,26 @@
 #include "debug.h"
 #include "alloc.h"
 
-volatile struct r_debug local_debug = {};
-extern volatile struct r_debug r_debug __attribute__ ((alias ("local_debug")));
-
-void debug_notify(void)
+volatile struct r_debug local_debug =
 {
+	.r_version = 1,
+	.r_map = NULL,
+	.r_brk = 0,
+	.r_state = RT_CONSISTENT,
+};
+
+extern volatile struct r_debug _r_debug __attribute__ ((alias ("local_debug")));
+
+__attribute__((noinline)) void debug_notify(void)
+{
+	asm volatile ("");
 }
 
 void debug_init(module *dlng)
 {
-	local_debug.r_version = 1;
-	local_debug.r_map = NULL;
 	local_debug.r_brk = (intptr_t)debug_notify;
-	local_debug.r_state = RT_CONSISTENT;
 	local_debug.r_ldbase = dlng->base_addr;
+	debug_notify();
 }
 
 void debug_add(module *mod)
