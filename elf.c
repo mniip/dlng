@@ -80,7 +80,7 @@ void load_segments(int fd, module *mod)
 		}
 }
 
-module *load_fd(int fd, char const *name)
+module *load_fd(int fd, char const *filename, char const *name)
 {
 	dumpf("Loading file %s\n", name);
 
@@ -104,7 +104,7 @@ module *load_fd(int fd, char const *name)
 	read_all(fd, phdrs, header.e_phnum * header.e_phentsize);
 
 	module *mod = create_module(name);
-	mod->filename = strdup(name);
+	mod->filename = strdup(filename);
 
 	void *base_addr = header.e_type == ET_EXEC ? 0 : base_addr_random(phdrs, header.e_phnum, header.e_phentsize);
 
@@ -136,7 +136,7 @@ module *load_soname(char const *name)
 	{
 		int fd = open(name, O_RDONLY, 0);
 		if(fd >= 0)
-			return load_fd(fd, name);
+			return load_fd(fd, name, name);
 	}
 
 	char const *usrlib = "/usr/lib/";
@@ -147,7 +147,7 @@ module *load_soname(char const *name)
 	int fd = open(newname, O_RDONLY, 0);
 	module *mod = NULL;
 	if(fd >= 0)
-		mod = load_fd(fd, newname);
+		mod = load_fd(fd, newname, name);
 	mmap_free(newname);
 	return mod;
 }
