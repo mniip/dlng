@@ -176,6 +176,9 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 	char const *name = &mod->strtab[mod->symtab[symbol].st_name];
 	dumpf("Resolving %s (%p)\n", name, ver_hash);
 
+	if(!strcmp(name, "__tls_get_addr"))
+		return (intptr_t)&__tls_get_addr;
+
 	int found_weak = 0;
 	size_t size_weak;
 	intptr_t weak;

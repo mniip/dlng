@@ -1,4 +1,4 @@
 {
-	global: _r_debug;
+	global: _r_debug; __tls_get_addr;
 	local: *;
 };
