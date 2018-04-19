@@ -181,6 +181,7 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 
 	int found_weak = 0;
 	size_t size_weak;
+	int ifunc_weak;
 	intptr_t weak;
 
 	mod_ns *ns;
@@ -215,6 +216,8 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 							dumpf("Found in %s\n", other->name);
 							if(size)
 								*size = sym->st_size;
+							if(ELFW(ST_TYPE(sym->st_info)) == STT_LOOS)
+								return ((intptr_t (*)(void))sym->st_value + other->base_addr)();
 							return sym->st_value + other->base_addr;
 						}
 					}
@@ -240,6 +243,7 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 							dumpf("Found (weak) in %s\n", other->name);
 							size_weak = sym->st_size;
 							weak = sym->st_value + other->base_addr;
+							ifunc_weak = ELFW(ST_TYPE(sym->st_info)) == STT_LOOS;
 							found_weak = 1;
 						}
 					}
@@ -249,6 +253,8 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 	{
 		if(size)
 			*size = size_weak;
+		if(ifunc_weak)
+			return ((intptr_t (*)(void))weak)();
 		return weak;
 	}
 	if(ELFW(ST_BIND(mod->symtab[symbol].st_info)) == STB_WEAK)
