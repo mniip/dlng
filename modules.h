@@ -32,6 +32,10 @@ typedef struct module
 	size_t size_st;
 	char *strtab;
 
+	size_t tls_offset;
+	ElfW(Addr) tls_tdata;
+	size_t tls_tdata_size;
+
 	void (*init)(int, char **, char **);
 	void (*fini)(void);
 

@@ -77,3 +77,10 @@ void *mmap_realloc(void *data, size_t size)
 	header->size = size;
 	return &header[1];
 }
+
+size_t mmap_usable_size(void *data)
+{
+	alloc_header *header = data;
+	header--;
+	return header->size - sizeof(alloc_header);
+}

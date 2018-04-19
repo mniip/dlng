@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <asm/prctl.h>
 #include <linux/fcntl.h>
 #include <linux/auxvec.h>
 
@@ -8,6 +7,7 @@
 #include "alloc.h"
 #include "syscalls.h"
 #include "util.h"
+#include "tls.h"
 #include "dump.h"
 #include "debug.h"
 
@@ -107,9 +107,7 @@ void dlng_main(void *stack)
 	if(!seen_entry)
 		panic("Cannot find program: AT_ENTRY not specified\n");
 
-	void **tls = mmap_malloc(sizeof(void *));
-	tls[0] = tls;
-	arch_prctl(ARCH_SET_FS, tls);
+	init_tls();
 	
 	debug_init(dlng);
 	debug_add(dlng);
@@ -215,8 +213,10 @@ void dlng_main(void *stack)
 		process_dynamic(program);
 	}
 
-
 	module *mod;
+	for(mod = dynamic_ns->first_mod; mod; mod = mod->next)
+		load_tls(mod);
+
 	for(mod = dynamic_ns->first_mod; mod; mod = mod->next)
 		if(mod->init)
 		{

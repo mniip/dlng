@@ -22,5 +22,6 @@
 
 extern struct module *load_soname(char const *);
 extern void process_dynamic(struct module *);
+extern void load_tls(struct module *);
 
 #endif

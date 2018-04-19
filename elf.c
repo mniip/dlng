@@ -8,6 +8,7 @@
 #include "alloc.h"
 #include "util.h"
 #include "modules.h"
+#include "tls.h"
 #include "dump.h"
 
 void *base_addr_random(ElfW(Phdr) *phdrs, size_t num_ph, size_t size_ph)
@@ -78,6 +79,18 @@ void load_segments(int fd, module *mod)
 					panic("Could not map header's bss\n");
 			}
 		}
+		else if(phdr->p_type == PT_TLS && phdr->p_memsz)
+		{
+			mod->tls_offset = static_tls_allocate(phdr->p_memsz);
+			mod->tls_tdata = phdr->p_vaddr;
+			mod->tls_tdata_size = phdr->p_filesz;
+		}
+}
+
+void load_tls(module *mod)
+{
+	if(mod->tls_tdata_size)
+		memcpy(get_tls() + mod->tls_offset, (void *)(mod->base_addr + mod->tls_tdata), mod->tls_tdata_size);
 }
 
 module *load_fd(int fd, char const *filename, char const *name)
@@ -114,6 +127,9 @@ module *load_fd(int fd, char const *filename, char const *name)
 	mod->ph_mapped = 0;
 	mod->num_ph = header.e_phnum;
 	mod->size_ph = header.e_phentsize;
+	mod->tls_offset = 0;
+	mod->tls_tdata = 0;
+	mod->tls_tdata_size = 0;
 
 	load_segments(fd, mod);
 
@@ -228,7 +244,9 @@ void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t adden
 			break;
 
 		case R_X86_64_TPOFF64:
-			*(intptr_t *)loc = (symbol ? symbol_value(mod, symbol) : 0) + addend;
+			if(symbol)
+				panic("R_X86_64_TPOFF64 with symbol\n");
+			*(size_t *)loc = mod->tls_offset + addend;
 			break;
 
 		case R_X86_64_IRELATIVE:
