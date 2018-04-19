@@ -258,7 +258,10 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 		return weak;
 	}
 	if(ELFW(ST_BIND(mod->symtab[symbol].st_info)) == STB_WEAK)
+	{
+		dumpf("Zeroing weak symbol %s (%s)\n", name, mod->name);
 		return 0;
+	}
 	panic("Could not find %s (%s)\n", name, mod->name);
 }
 
@@ -300,7 +303,7 @@ void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t adden
 				size_t size;
 				intptr_t value = symbol_value_sized(mod, symbol, ver_hash, &size);
 				memcpy(loc, (void *)value, size);
-				dumpf("COPY %s %p <- %p + %x\n", &mod->strtab[mod->symtab[symbol].st_name], offset, value, size);
+				dumpf("COPY %s %p <- %p + %x\n", &mod->strtab[mod->symtab[symbol].st_name], loc, value, size);
 				break;
 			}
 
@@ -479,4 +482,10 @@ void process_dynamic(module *mod)
 	}
 
 	debug_add(mod);
+	load_tls(mod);
+	if(mod->init)
+	{
+		dumpf("Calling init for %s\n", mod->name);
+		mod->init(global_argc, global_argv, global_envp);
+	}
 }

@@ -15,7 +15,9 @@ extern char _start[];
 extern char _DYNAMIC[];
 extern void start_program(void *, void (*)());
 
-void dlng_main_finish(void);
+intptr_t global_argc;
+char **global_argv;
+char **global_envp;
 
 struct rtld_hook
 {
@@ -27,9 +29,10 @@ struct rtld_hook
 void *dlopen_mode(char const *mod, int f)
 {
 	if(mod)
-		panic("dlmopen(\"%s\", %x)\n", mod, f);
+		dumpf("dlmopen(\"%s\", %x)\n", mod, f);
 	else
-		panic("dlmopen(NULL, %x)\n", f);
+		dumpf("dlmopen(NULL, %x)\n", f);
+	return NULL;
 }
 
 void *dlsym(void *l, char const *s)
@@ -117,6 +120,10 @@ void dlng_main(void *stack)
 	dlng_rtld.dlclose = dlclose;
 	
 	module *program;
+
+	global_argc = argc;
+	global_argv = argv;
+	global_envp = envp;
 
 	if((void *)entry == (void *)&_start)
 	{
@@ -213,20 +220,10 @@ void dlng_main(void *stack)
 		process_dynamic(program);
 	}
 
-	module *mod;
-	for(mod = dynamic_ns->first_mod; mod; mod = mod->next)
-		load_tls(mod);
-
-	for(mod = dynamic_ns->first_mod; mod; mod = mod->next)
-		if(mod->init)
-		{
-			dumpf("Calling init for %s\n", mod->name);
-			mod->init(argc, argv, envp);
-		}
-
 	dump_mods();
 
 	size_t symidx;
+	module *mod;
 	ElfW(Sym) *sym;
 	for(mod = dynamic_ns->first_mod; mod; mod = mod->next)
 		for(symidx = 0, sym = mod->symtab; symidx < mod->num_st; symidx++, sym = PTR_ADVANCE_I(sym, mod->size_st))

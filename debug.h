@@ -30,4 +30,8 @@ extern void debug_add(module *);
 extern void debug_remove(module *);
 extern void debug_update(module *);
 
+extern intptr_t global_argc;
+extern char **global_argv;
+extern char **global_envp;
+
 #endif
