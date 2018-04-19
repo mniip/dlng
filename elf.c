@@ -127,6 +127,9 @@ module *load_fd(int fd, char const *filename, char const *name)
 	mod->ph_mapped = 0;
 	mod->num_ph = header.e_phnum;
 	mod->size_ph = header.e_phentsize;
+	mod->ver_sym = NULL;
+	mod->num_ver_defs = 0;
+	mod->ver_defs = 0;
 	mod->tls_offset = 0;
 	mod->tls_tdata = 0;
 	mod->tls_tdata_size = 0;
@@ -168,10 +171,10 @@ module *load_soname(char const *name)
 	return mod;
 }
 
-intptr_t symbol_value_sized(module *mod, size_t symbol, size_t *size)
+intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t *size)
 {
 	char const *name = &mod->strtab[mod->symtab[symbol].st_name];
-	dumpf("Resolving %s\n", name);
+	dumpf("Resolving %s (%p)\n", name, ver_hash);
 
 	int found_weak = 0;
 	size_t size_weak;
@@ -191,6 +194,21 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t *size)
 					{
 						if(!strcmp(name, &other->strtab[sym->st_name]))
 						{
+							if(ver_hash != (size_t)-1 && other->ver_sym && other->num_ver_defs && (!(other->ver_sym[symidx] & 0x8000) || other == mod))
+							{
+								size_t found_ver = -1;
+								ElfW(Verdef) *def;
+								size_t defidx;
+								for(def = other->ver_defs, defidx = 0; defidx < other->num_ver_defs; def = PTR_ADVANCE_I(def, def->vd_next), defidx++)
+									if(def->vd_ndx == (other->ver_sym[symidx] & ~0x8000))
+									{
+										found_ver = def->vd_hash;
+										break;
+									}
+								if(found_ver != -1 && found_ver != ver_hash)
+									continue;
+							}
+
 							dumpf("Found in %s\n", other->name);
 							if(size)
 								*size = sym->st_size;
@@ -201,6 +219,21 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t *size)
 					{
 						if(!strcmp(name, &other->strtab[sym->st_name]))
 						{
+							if(ver_hash != (size_t)-1 && other->ver_sym && other->num_ver_defs && (!(other->ver_sym[symidx] & 0x8000) || other == mod))
+							{
+								size_t found_ver = -1;
+								ElfW(Verdef) *def;
+								size_t defidx;
+								for(def = other->ver_defs, defidx = 0; defidx < other->num_ver_defs; def = PTR_ADVANCE_I(def, def->vd_next), defidx++)
+									if(def->vd_ndx == (other->ver_sym[symidx] & ~0x8000))
+									{
+										found_ver = def->vd_hash;
+										break;
+									}
+								if(found_ver != -1 && found_ver != ver_hash)
+									continue;
+							}
+
 							dumpf("Found (weak) in %s\n", other->name);
 							size_weak = sym->st_size;
 							weak = sym->st_value + other->base_addr;
@@ -220,23 +253,23 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t *size)
 	panic("Could not find %s (%s)\n", name, mod->name);
 }
 
-intptr_t symbol_value(module *mod, size_t symbol)
+intptr_t symbol_value(module *mod, size_t symbol, size_t ver_hash)
 {
-	return symbol_value_sized(mod, symbol, NULL);
+	return symbol_value_sized(mod, symbol, ver_hash, NULL);
 }
 
-void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t addend)
+void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t addend, size_t ver_hash)
 {
 	void *loc = mod->base_addr + offset;
 	switch(type)
 	{
 		case R_X86_64_64:
-			*(uint64_t *)loc = symbol_value(mod, symbol) + addend;
+			*(uint64_t *)loc = symbol_value(mod, symbol, ver_hash) + addend;
 			break;
 
 		case R_X86_64_GLOB_DAT:
 		case R_X86_64_JUMP_SLOT:
-			*(intptr_t *)loc = symbol_value(mod, symbol);
+			*(intptr_t *)loc = symbol_value(mod, symbol, ver_hash);
 			break;
 
 		case R_X86_64_RELATIVE:
@@ -256,7 +289,7 @@ void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t adden
 		case R_X86_64_COPY:
 			{
 				size_t size;
-				intptr_t value = symbol_value_sized(mod, symbol, &size);
+				intptr_t value = symbol_value_sized(mod, symbol, ver_hash, &size);
 				memcpy(loc, (void *)value, size);
 				dumpf("COPY %s %p <- %p + %x\n", &mod->strtab[mod->symtab[symbol].st_name], offset, value, size);
 				break;
@@ -268,18 +301,43 @@ void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t adden
 	}
 }
 
-void process_rela(module *mod, ElfW(Rela) *rela, size_t rela_size, size_t rela_length)
+size_t lookup_versym_hash(module *mod, size_t symbol, size_t num_ver_needs, ElfW(Verneed) *ver_needs)
+{
+	ElfW(Verneed) *need;
+	size_t needidx;
+	for(need = ver_needs, needidx = 0; needidx < num_ver_needs; need = PTR_ADVANCE_I(need, need->vn_next), needidx++)
+	{
+		ElfW(Vernaux) *aux = (ElfW(Vernaux) *)PTR_ADVANCE_I(need, need->vn_aux);
+		if(aux->vna_other == mod->ver_sym[symbol])
+			return aux->vna_hash;
+	}
+	return (size_t)-1;
+}
+
+void process_rela(module *mod, ElfW(Rela) *rela, size_t rela_size, size_t rela_length, size_t num_ver_needs, ElfW(Verneed) *ver_needs)
 {
 	ElfW(Rela) *r;
 	for(r = rela; r < PTR_ADVANCE_I(rela, rela_length); r = PTR_ADVANCE_I(r, rela_size))
-		relocate(mod, ELFW(R_TYPE(r->r_info)), ELFW(R_SYM(r->r_info)), (void *)r->r_offset, r->r_addend);
+	{
+		size_t ver_hash = -1;
+		if(ELFW(R_SYM(r->r_info)))
+			ver_hash = lookup_versym_hash(mod, ELFW(R_SYM(r->r_info)), num_ver_needs, ver_needs);
+
+		relocate(mod, ELFW(R_TYPE(r->r_info)), ELFW(R_SYM(r->r_info)), (void *)r->r_offset, r->r_addend, ver_hash);
+	}
 }
 
-void process_rel(module *mod, ElfW(Rel) *rel, size_t rel_size, size_t rel_length)
+void process_rel(module *mod, ElfW(Rel) *rel, size_t rel_size, size_t rel_length, size_t num_ver_needs, ElfW(Verneed) *ver_needs)
 {
 	ElfW(Rel) *r;
 	for(r = rel; r < PTR_ADVANCE_I(rel, rel_length); r = PTR_ADVANCE_I(r, rel_size))
-		relocate(mod, ELFW(R_TYPE(r->r_info)), ELFW(R_SYM(r->r_info)), (void *)r->r_offset, 0);
+	{
+		size_t ver_hash = -1;
+		if(ELFW(R_SYM(r->r_info)))
+			ver_hash = lookup_versym_hash(mod, ELFW(R_SYM(r->r_info)), num_ver_needs, ver_needs);
+
+		relocate(mod, ELFW(R_TYPE(r->r_info)), ELFW(R_SYM(r->r_info)), (void *)r->r_offset, 0, ver_hash);
+	}
 }
 
 void guess_symtab_size(module *mod)
@@ -336,6 +394,9 @@ void process_dynamic(module *mod)
 
 	int seen_hash = 0;
 
+	size_t num_ver_needs = 0;
+	ElfW(Verneed) *ver_needs = NULL;
+
 	ElfW(Dyn) *de;
 	for(de = mod->dynamic; de->d_tag != DT_NULL; de++)
 		switch(de->d_tag)
@@ -355,7 +416,11 @@ void process_dynamic(module *mod)
 			case DT_PLTRELSZ: pltrel_length = de->d_un.d_val; break;
 			case DT_INIT: mod->init = (void(*)())(de->d_un.d_ptr + mod->base_addr); break;
 			case DT_FINI: mod->fini = (void(*)())(de->d_un.d_ptr + mod->base_addr); break;
-
+			case DT_VERDEFNUM: mod->num_ver_defs = de->d_un.d_val; break;
+			case DT_VERDEF: mod->ver_defs = (void *)(de->d_un.d_ptr + mod->base_addr); break;
+			case DT_VERSYM: mod->ver_sym = (void *)(de->d_un.d_ptr + mod->base_addr); break;
+			case DT_VERNEEDNUM: num_ver_needs = de->d_un.d_val; break;
+			case DT_VERNEED: ver_needs = (void *)(de->d_un.d_ptr + mod->base_addr); break;
 			default:
 				break;
 		}
@@ -393,15 +458,15 @@ void process_dynamic(module *mod)
 		}
 
 	if(seen_rela)
-		process_rela(mod, rela, rela_size, rela_length);
+		process_rela(mod, rela, rela_size, rela_length, num_ver_needs, ver_needs);
 	if(seen_rel)
-		process_rel(mod, rel, rel_size, rel_length);
+		process_rel(mod, rel, rel_size, rel_length, num_ver_needs, ver_needs);
 	if(seen_pltrel)
 	{
 		if(pltrel_type == DT_RELA)
-			process_rela(mod, (ElfW(Rela) *)pltrel, rela_size, pltrel_length);
+			process_rela(mod, (ElfW(Rela) *)pltrel, rela_size, pltrel_length, num_ver_needs, ver_needs);
 		else if(pltrel_type == DT_REL)
-			process_rel(mod, (ElfW(Rel) *)pltrel, rel_size, pltrel_length);
+			process_rel(mod, (ElfW(Rel) *)pltrel, rel_size, pltrel_length, num_ver_needs, ver_needs);
 	}
 
 	debug_add(mod);
