@@ -171,7 +171,7 @@ module *load_soname(char const *name)
 	return mod;
 }
 
-intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t *size)
+intptr_t symbol_value_extra(module *mod, size_t symbol, size_t ver_hash, size_t *size, module **contains)
 {
 	char const *name = &mod->strtab[mod->symtab[symbol].st_name];
 	dumpf("Resolving %s (%p)\n", name, ver_hash);
@@ -181,6 +181,7 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 
 	int found_weak = 0;
 	size_t size_weak;
+	module *contains_weak;
 	int ifunc_weak;
 	intptr_t weak;
 
@@ -216,9 +217,11 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 							dumpf("Found in %s\n", other->name);
 							if(size)
 								*size = sym->st_size;
+							if(contains)
+								*contains = other;
 							if(ELFW(ST_TYPE(sym->st_info)) == STT_LOOS)
 								return ((intptr_t (*)(void))sym->st_value + other->base_addr)();
-							return sym->st_value + other->base_addr;
+							return sym->st_value + (ELFW(ST_TYPE(sym->st_info)) == STT_TLS ? 0 : other->base_addr);
 						}
 					}
 					else if(bind == STB_WEAK)
@@ -242,7 +245,8 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 
 							dumpf("Found (weak) in %s\n", other->name);
 							size_weak = sym->st_size;
-							weak = sym->st_value + other->base_addr;
+							contains_weak = other;
+							weak = sym->st_value + (ELFW(ST_TYPE(sym->st_info)) == STT_TLS ? 0 : other->base_addr);
 							ifunc_weak = ELFW(ST_TYPE(sym->st_info)) == STT_LOOS;
 							found_weak = 1;
 						}
@@ -253,12 +257,18 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 	{
 		if(size)
 			*size = size_weak;
+		if(contains)
+			*contains = contains_weak;
 		if(ifunc_weak)
 			return ((intptr_t (*)(void))weak)();
 		return weak;
 	}
 	if(ELFW(ST_BIND(mod->symtab[symbol].st_info)) == STB_WEAK)
 	{
+		if(size)
+			*size = 0;
+		if(contains)
+			*contains = NULL;
 		dumpf("Zeroing weak symbol %s (%s)\n", name, mod->name);
 		return 0;
 	}
@@ -267,7 +277,7 @@ intptr_t symbol_value_sized(module *mod, size_t symbol, size_t ver_hash, size_t 
 
 intptr_t symbol_value(module *mod, size_t symbol, size_t ver_hash)
 {
-	return symbol_value_sized(mod, symbol, ver_hash, NULL);
+	return symbol_value_extra(mod, symbol, ver_hash, NULL, NULL);
 }
 
 void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t addend, size_t ver_hash)
@@ -290,8 +300,15 @@ void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t adden
 
 		case R_X86_64_TPOFF64:
 			if(symbol)
-				panic("R_X86_64_TPOFF64 with symbol\n");
-			*(size_t *)loc = mod->tls_offset + addend;
+			{
+				module *other;
+				intptr_t value = symbol_value_extra(mod, symbol, ver_hash, NULL, &other);
+				if(!other)
+					other = mod;
+				*(size_t *)loc = other->tls_offset + value + addend;
+			}
+			else
+				*(size_t *)loc = mod->tls_offset + addend;
 			break;
 
 		case R_X86_64_IRELATIVE:
@@ -301,7 +318,7 @@ void relocate(module *mod, int type, size_t symbol, void *offset, intptr_t adden
 		case R_X86_64_COPY:
 			{
 				size_t size;
-				intptr_t value = symbol_value_sized(mod, symbol, ver_hash, &size);
+				intptr_t value = symbol_value_extra(mod, symbol, ver_hash, &size, NULL);
 				memcpy(loc, (void *)value, size);
 				dumpf("COPY %s %p <- %p + %x\n", &mod->strtab[mod->symtab[symbol].st_name], loc, value, size);
 				break;
